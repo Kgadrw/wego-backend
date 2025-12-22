@@ -9,7 +9,7 @@ const __dirname = dirname(__filename);
 // Load .env file from server directory
 dotenv.config({ path: join(__dirname, '..', '.env') });
 
-// Create transporter (reuse from emailService if possible, but create new one for clarity)
+// Create transporter with timeout settings
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT || '587'),
@@ -17,6 +17,13 @@ const transporter = nodemailer.createTransport({
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
+  },
+  connectionTimeout: 5000, // 5 seconds timeout for connection
+  greetingTimeout: 5000, // 5 seconds timeout for greeting
+  socketTimeout: 5000, // 5 seconds timeout for socket
+  requireTLS: false,
+  tls: {
+    rejectUnauthorized: false,
   },
 });
 

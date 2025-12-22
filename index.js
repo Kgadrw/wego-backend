@@ -48,10 +48,13 @@ mongoose.connect(MONGODB_URI, {
     // process.exit(1);
   });
 
-// Verify email connection on startup (non-blocking)
-verifyEmailConnection().catch(() => {
-  console.warn('⚠️ Email service will not be available until SMTP credentials are configured');
-});
+// Verify email connection on startup (non-blocking, with timeout)
+// This runs asynchronously and won't block server startup
+setTimeout(() => {
+  verifyEmailConnection().catch(() => {
+    // Error already handled in verifyEmailConnection
+  });
+}, 2000); // Wait 2 seconds after server starts to verify email
 
 // Routes
 app.use('/api/products', productRoutes);

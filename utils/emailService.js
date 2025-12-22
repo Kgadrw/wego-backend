@@ -9,7 +9,7 @@ const __dirname = dirname(__filename);
 // Load .env file from server directory
 dotenv.config({ path: join(__dirname, '..', '.env') });
 
-// Create transporter
+// Create transporter with timeout settings
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT || '587'),
@@ -18,16 +18,43 @@ const transporter = nodemailer.createTransport({
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+  connectionTimeout: 5000, // 5 seconds timeout for connection
+  greetingTimeout: 5000, // 5 seconds timeout for greeting
+  socketTimeout: 5000, // 5 seconds timeout for socket
+  // Don't require TLS for connection
+  requireTLS: false,
+  tls: {
+    rejectUnauthorized: false,
+  },
 });
 
-// Verify transporter connection
+// Verify transporter connection with timeout
 export const verifyEmailConnection = async () => {
+  // Only verify if SMTP credentials are provided
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    console.warn('⚠️ SMTP credentials not configured. Email service will not be available.');
+    return false;
+  }
+
   try {
-    await transporter.verify();
+    // Add timeout to verification (5 seconds)
+    const verifyPromise = transporter.verify();
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Email verification timeout')), 5000);
+    });
+
+    await Promise.race([verifyPromise, timeoutPromise]);
     console.log('✅ Email server is ready to take our messages');
     return true;
   } catch (error) {
-    console.error('❌ Email server connection error:', error);
+    // Don't log full error stack for timeout - just a warning
+    if (error.message === 'Email verification timeout' || error.code === 'ETIMEDOUT') {
+      console.warn('⚠️ Email server connection timeout. Email service may not be available.');
+      console.warn('💡 This is non-critical - the server will continue running.');
+    } else {
+      console.warn('⚠️ Email server connection error:', error.message);
+      console.warn('💡 Email service may not be available until SMTP is properly configured.');
+    }
     return false;
   }
 };
