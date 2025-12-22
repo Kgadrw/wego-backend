@@ -58,29 +58,19 @@ router.post('/', async (req, res) => {
     const orderData = {
       ...req.body,
       orderId: generateOrderId(),
-      status: 'Completed', // Mark as completed upon checkout (overrides any status from req.body)
+      status: 'Pending', // Set to Pending - admin will confirm payment before sending invoice
     };
     const order = new Order(orderData);
     const savedOrder = await order.save();
     
-    // Update product stock and check for out of stock, calculate profit
+    // Calculate profit and purchasing prices (but don't reduce stock yet - wait for payment confirmation)
     const Product = (await import('../models/Product.js')).default;
-    const outOfStockProducts = [];
     let totalProfit = 0;
     const updatedItems = [];
     
     for (const item of savedOrder.items) {
       const product = await Product.findById(item.productId);
       if (product) {
-        const oldStock = product.stock || 0;
-        const newStock = Math.max(0, oldStock - item.quantity);
-        product.stock = newStock;
-        
-        // If stock becomes 0 and it wasn't 0 before, add to out of stock list
-        if (newStock === 0 && oldStock > 0) {
-          outOfStockProducts.push(product.name);
-        }
-        
         // Calculate profit for this item
         const purchasingPrice = product.purchasingPrice || 0;
         const sellingPrice = item.price;
@@ -92,8 +82,6 @@ router.post('/', async (req, res) => {
           ...item.toObject(),
           purchasingPrice: purchasingPrice,
         });
-        
-        await product.save();
       } else {
         updatedItems.push(item.toObject());
       }
@@ -106,15 +94,6 @@ router.post('/', async (req, res) => {
     
     const populatedOrder = await Order.findById(savedOrder._id)
       .populate('items.productId');
-    
-    // Include low stock alert in response if any products are out of stock
-    const response = populatedOrder.toObject();
-    if (outOfStockProducts.length > 0) {
-      response.lowStockAlert = {
-        message: `The following products are now out of stock: ${outOfStockProducts.join(', ')}`,
-        products: outOfStockProducts
-      };
-    }
     
     // Save customer email to newsletter subscribers (async)
     (async () => {
@@ -142,17 +121,8 @@ router.post('/', async (req, res) => {
       }
     })();
 
-    // Send invoice via email (async, don't wait for it to complete)
-    (async () => {
-      try {
-        const pdfBuffer = await generateInvoicePDFBuffer(savedOrder.orderId);
-        await sendInvoiceEmail(savedOrder, pdfBuffer);
-      } catch (emailError) {
-        console.error('❌ Error sending invoice email:', emailError);
-      }
-    })();
-
-    res.status(201).json(response);
+    // Do NOT send invoice automatically - wait for admin to confirm payment
+    res.status(201).json(populatedOrder.toObject());
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -166,15 +136,59 @@ router.put('/:id/status', async (req, res) => {
       return res.status(400).json({ error: 'Invalid status' });
     }
 
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    ).populate('items.productId');
-
+    const order = await Order.findById(req.params.id).populate('items.productId');
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
+
+    const oldStatus = order.status;
+    order.status = status;
+    await order.save();
+
+    // If status changed to "Completed", reduce stock and send invoice
+    if (status === 'Completed' && oldStatus !== 'Completed') {
+      const Product = (await import('../models/Product.js')).default;
+      const outOfStockProducts = [];
+      
+      // Reduce product stock
+      for (const item of order.items) {
+        const product = await Product.findById(item.productId);
+        if (product) {
+          const oldStock = product.stock || 0;
+          const newStock = Math.max(0, oldStock - item.quantity);
+          product.stock = newStock;
+          
+          // If stock becomes 0 and it wasn't 0 before, add to out of stock list
+          if (newStock === 0 && oldStock > 0) {
+            outOfStockProducts.push(product.name);
+          }
+          
+          await product.save();
+        }
+      }
+
+      // Send invoice via email (async, don't wait for it to complete)
+      (async () => {
+        try {
+          const pdfBuffer = await generateInvoicePDFBuffer(order.orderId);
+          await sendInvoiceEmail(order, pdfBuffer);
+          console.log(`✅ Invoice email sent for order ${order.orderId}`);
+        } catch (emailError) {
+          console.error('❌ Error sending invoice email:', emailError);
+        }
+      })();
+
+      // Include low stock alert in response if any products are out of stock
+      const response = order.toObject();
+      if (outOfStockProducts.length > 0) {
+        response.lowStockAlert = {
+          message: `The following products are now out of stock: ${outOfStockProducts.join(', ')}`,
+          products: outOfStockProducts
+        };
+      }
+      return res.json(response);
+    }
+
     res.json(order);
   } catch (error) {
     res.status(400).json({ error: error.message });
