@@ -74,7 +74,13 @@ export const generateInvoicePDFBuffer = async (orderId) => {
     doc.text(`Invoice Number: ${settings.invoicePrefix}-${order.orderId}`, 50, doc.y);
     doc.text(`Order ID: ${order.orderId}`, 50, doc.y + 15);
     doc.text(`Date: ${new Date(order.createdAt).toLocaleDateString()}`, 50, doc.y + 15);
-    doc.text(`Status: ${order.status}`, 50, doc.y + 15);
+    if (order.status === 'Completed') {
+      doc.fontSize(12).font('Helvetica-Bold').fillColor('green');
+      doc.text(`Status: PAID`, 50, doc.y + 15);
+      doc.fillColor('black');
+    } else {
+      doc.text(`Status: ${order.status}`, 50, doc.y + 15);
+    }
     
     doc.moveDown(2);
 

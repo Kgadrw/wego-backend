@@ -44,12 +44,15 @@ export const sendInvoiceEmail = async (order, pdfBuffer) => {
     const InvoiceSettings = (await import('../models/InvoiceSettings.js')).default;
     const settings = await InvoiceSettings.getSettings();
 
+    const isPaid = order.status === 'Completed';
+    const invoiceType = isPaid ? 'Paid Invoice' : 'Invoice';
+    
     const mailOptions = {
       from: `"${settings.companyName || 'Wego Connect'}" <${process.env.SMTP_USER}>`,
       to: order.customerEmail,
       replyTo: settings.companyEmail || process.env.SMTP_USER,
-      subject: `Invoice for Order ${order.orderId} - ${settings.companyName || 'Wego Connect'}`,
-      text: `Dear ${order.customerName},\n\nThank you for your order! Please find your invoice attached.\n\nOrder ID: ${order.orderId}\nTotal: RWF ${order.total.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}\nStatus: ${order.status}\n\nIf you have any questions about your order, please reply to this email or contact us at ${settings.companyPhone || 'our customer service'}.\n\nBest regards,\n${settings.companyName || 'Wego Connect'}`,
+      subject: `${invoiceType} for Order ${order.orderId} - ${settings.companyName || 'Wego Connect'}`,
+      text: `Dear ${order.customerName},\n\n${isPaid ? 'Payment received! Thank you for your order. ' : 'Thank you for your order! '}Please find your ${isPaid ? 'paid ' : ''}invoice attached.\n\nOrder ID: ${order.orderId}\nTotal: RWF ${order.total.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}\nStatus: ${isPaid ? 'PAID' : order.status}\n\nIf you have any questions about your order, please reply to this email or contact us at ${settings.companyPhone || 'our customer service'}.\n\nBest regards,\n${settings.companyName || 'Wego Connect'}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -72,7 +75,7 @@ export const sendInvoiceEmail = async (order, pdfBuffer) => {
                     <!-- Thank You Heading -->
                     <tr>
                       <td style="padding: 0 30px 20px 30px;">
-                        <h1 style="margin: 0; font-size: 32px; font-weight: bold; color: #000000;">Thank you for your order</h1>
+                        <h1 style="margin: 0; font-size: 32px; font-weight: bold; color: #000000;">${isPaid ? 'Payment Received - Thank You!' : 'Thank you for your order'}</h1>
                       </td>
                     </tr>
                     
@@ -80,8 +83,9 @@ export const sendInvoiceEmail = async (order, pdfBuffer) => {
                     <tr>
                       <td style="padding: 0 30px 30px 30px;">
                         <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #000000;">
-                          Your order has been successfully placed. We've received your payment and are processing your order. 
-                          Please find your detailed invoice attached to this email for your records.
+                          ${isPaid 
+                            ? 'Payment confirmed! We have received your payment and your order is being processed. Please find your paid invoice attached to this email for your records.' 
+                            : 'Your order has been successfully placed. Please find your detailed invoice attached to this email for your records.'}
                         </p>
                       </td>
                     </tr>
@@ -103,7 +107,7 @@ export const sendInvoiceEmail = async (order, pdfBuffer) => {
                               <p style="margin: 0 0 8px 0; font-size: 14px; font-weight: bold; color: #DC2626;">Order Information</p>
                               <p style="margin: 0 0 4px 0; font-size: 14px; color: #DC2626;">Order ID: ${order.orderId}</p>
                               <p style="margin: 0 0 4px 0; font-size: 14px; color: #DC2626;">Purchase Date: ${new Date(order.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</p>
-                              <p style="margin: 0; font-size: 14px; color: #DC2626;">Status: ${order.status}</p>
+                              <p style="margin: 0; font-size: 14px; color: ${isPaid ? '#10b981' : '#DC2626'}; font-weight: ${isPaid ? 'bold' : 'normal'};">Status: ${isPaid ? 'PAID' : order.status}</p>
                             </td>
                           </tr>
                         </table>
