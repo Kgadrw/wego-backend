@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-import bcrypt from 'bcryptjs';
 
 const adminSchema = new mongoose.Schema({
   email: {
@@ -26,24 +25,11 @@ const adminSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-// Hash password before saving
-adminSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) {
-    return next();
-  }
-  
-  try {
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-    return next();
-  } catch (error) {
-    return next(error);
-  }
-});
+// Password is stored in plain text (no hashing)
 
-// Method to compare password
+// Method to compare password (plain text comparison)
 adminSchema.methods.comparePassword = async function(candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
+  return candidatePassword === this.password;
 };
 
 const Admin = mongoose.model('Admin', adminSchema);
