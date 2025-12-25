@@ -21,10 +21,10 @@ async function initAdmin() {
       process.exit(0);
     }
 
-    // Create default admin
+    // Create default admin (password will be hashed by pre-save hook)
     const admin = new Admin({
       email: 'admin@wego.com',
-      password: 'admin123',
+      password: 'admin123', // Will be automatically hashed
       name: 'Admin User',
       role: 'admin',
     });

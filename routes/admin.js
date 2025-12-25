@@ -8,12 +8,18 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    // Validate input
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    // Normalize email (lowercase and trim)
+    // Normalize and trim email and password
     const normalizedEmail = email.toLowerCase().trim();
+    const trimmedPassword = password.trim();
+
+    if (!normalizedEmail || !trimmedPassword) {
+      return res.status(400).json({ error: 'Email and password cannot be empty' });
+    }
 
     // Find admin by email
     const admin = await Admin.findOne({ email: normalizedEmail });
@@ -22,15 +28,14 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // Compare password
-    const isMatch = await admin.comparePassword(password);
+    // Compare password (trimming is handled in the model method)
+    const isMatch = await admin.comparePassword(trimmedPassword);
     if (!isMatch) {
       console.log(`❌ Login attempt with incorrect password for: ${normalizedEmail}`);
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
     console.log(`✅ Admin login successful: ${normalizedEmail}`);
-    // In production, you would generate a JWT token here
     res.json({
       success: true,
       message: 'Login successful',
@@ -43,7 +48,7 @@ router.post('/login', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Login error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An error occurred during login. Please try again.' });
   }
 });
 
@@ -56,8 +61,19 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Email, password, and name are required' });
     }
 
-    // Normalize email
+    // Normalize and validate
     const normalizedEmail = email.toLowerCase().trim();
+    const trimmedPassword = password.trim();
+    const trimmedName = name.trim();
+
+    if (!normalizedEmail || !trimmedPassword || !trimmedName) {
+      return res.status(400).json({ error: 'Email, password, and name cannot be empty' });
+    }
+
+    // Validate password length
+    if (trimmedPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
 
     // Check if admin already exists
     const existingAdmin = await Admin.findOne({ email: normalizedEmail });
@@ -67,8 +83,8 @@ router.post('/register', async (req, res) => {
 
     const admin = new Admin({ 
       email: normalizedEmail, 
-      password, 
-      name,
+      password: trimmedPassword, // Will be hashed by pre-save hook
+      name: trimmedName,
       role: 'admin'
     });
     await admin.save();
@@ -109,7 +125,7 @@ router.post('/init', async (req, res) => {
       });
     }
 
-    // Create default admin
+    // Create default admin (password will be hashed by pre-save hook)
     const admin = new Admin({
       email: defaultEmail,
       password: defaultPassword,
