@@ -28,10 +28,20 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // Compare password (trimming is handled in the model method)
+    // Debug logging
+    console.log(`🔍 Login attempt for: ${normalizedEmail}`);
+    console.log(`🔍 Stored password length: ${admin.password ? admin.password.length : 0}`);
+    console.log(`🔍 Stored password starts with $2 (hashed): ${admin.password && admin.password.startsWith('$2')}`);
+    console.log(`🔍 Provided password length: ${trimmedPassword.length}`);
+
+    // Compare password (plain text comparison)
     const isMatch = await admin.comparePassword(trimmedPassword);
+    
     if (!isMatch) {
       console.log(`❌ Login attempt with incorrect password for: ${normalizedEmail}`);
+      console.log(`🔍 Password comparison failed`);
+      console.log(`🔍 Stored password: ${admin.password ? admin.password.substring(0, 20) + '...' : 'null'}`);
+      console.log(`🔍 Provided password: ${trimmedPassword.substring(0, 20)}...`);
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
@@ -48,6 +58,7 @@ router.post('/login', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Login error:', error);
+    console.error('❌ Error stack:', error.stack);
     res.status(500).json({ error: 'An error occurred during login. Please try again.' });
   }
 });
@@ -83,7 +94,7 @@ router.post('/register', async (req, res) => {
 
     const admin = new Admin({ 
       email: normalizedEmail, 
-      password: trimmedPassword, // Will be hashed by pre-save hook
+      password: trimmedPassword, // Stored as plain text
       name: trimmedName,
       role: 'admin'
     });
@@ -108,7 +119,7 @@ router.post('/register', async (req, res) => {
 // Initialize default admin (for first-time setup)
 router.post('/init', async (req, res) => {
   try {
-    const defaultEmail = 'admin@wego.com';
+    const defaultEmail = 'admin@connectrwanda.com';
     const defaultPassword = 'admin123';
     const defaultName = 'Admin User';
 
@@ -125,7 +136,7 @@ router.post('/init', async (req, res) => {
       });
     }
 
-    // Create default admin (password will be hashed by pre-save hook)
+    // Create default admin (password stored as plain text)
     const admin = new Admin({
       email: defaultEmail,
       password: defaultPassword,
@@ -150,6 +161,91 @@ router.post('/init', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Admin initialization error:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Reset admin password (for troubleshooting)
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, newPassword } = req.body;
+
+    if (!email || !newPassword) {
+      return res.status(400).json({ error: 'Email and new password are required' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const admin = await Admin.findOne({ email: normalizedEmail });
+
+    if (!admin) {
+      return res.status(404).json({ error: 'Admin not found' });
+    }
+
+    // Update password (stored as plain text)
+    admin.password = newPassword.trim();
+    admin.markModified('password');
+    await admin.save();
+
+    console.log(`✅ Password reset for: ${normalizedEmail}`);
+    res.json({
+      success: true,
+      message: 'Password reset successfully',
+    });
+  } catch (error) {
+    console.error('❌ Password reset error:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Ensure admin exists (for testing/setup)
+router.post('/ensure-admin', async (req, res) => {
+  try {
+    const email = 'admin@connectrwanda.com';
+    const password = 'admin123';
+    const name = 'Admin User';
+
+    let admin = await Admin.findOne({ email });
+
+    if (admin) {
+      // Update password to plain text if it's hashed
+      if (admin.password && admin.password.startsWith('$2')) {
+        console.log(`🔄 Converting hashed password to plain text`);
+        admin.password = password;
+        admin.markModified('password');
+        await admin.save();
+      }
+      
+      return res.json({
+        success: true,
+        message: 'Admin already exists',
+        admin: {
+          email: admin.email,
+          name: admin.name,
+          passwordIsPlainText: !admin.password.startsWith('$2'),
+        },
+      });
+    }
+
+    // Create new admin
+    admin = new Admin({
+      email,
+      password,
+      name,
+      role: 'admin',
+    });
+    await admin.save();
+
+    console.log(`✅ Admin created: ${email}`);
+    res.json({
+      success: true,
+      message: 'Admin created successfully',
+      credentials: {
+        email,
+        password,
+      },
+    });
+  } catch (error) {
+    console.error('❌ Ensure admin error:', error);
     res.status(400).json({ error: error.message });
   }
 });

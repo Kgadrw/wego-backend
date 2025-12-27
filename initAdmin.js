@@ -14,24 +14,24 @@ async function initAdmin() {
     console.log('✅ Connected to MongoDB');
 
     // Check if admin already exists
-    const existingAdmin = await Admin.findOne({ email: 'admin@wego.com' });
+    const existingAdmin = await Admin.findOne({ email: 'admin@connectrwanda.com' });
     
     if (existingAdmin) {
       console.log('ℹ️  Admin user already exists');
       process.exit(0);
     }
 
-    // Create default admin (password will be hashed by pre-save hook)
+    // Create default admin (password stored as plain text)
     const admin = new Admin({
-      email: 'admin@wego.com',
-      password: 'admin123', // Will be automatically hashed
+      email: 'admin@connectrwanda.com',
+      password: 'admin123',
       name: 'Admin User',
       role: 'admin',
     });
 
     await admin.save();
     console.log('✅ Default admin user created');
-    console.log('📧 Email: admin@wego.com');
+    console.log('📧 Email: admin@connectrwanda.com');
     console.log('🔑 Password: admin123');
     
     process.exit(0);

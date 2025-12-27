@@ -8,7 +8,8 @@
     "start": "node index.js",
     "dev": "node --watch index.js",
     "init-admin": "node initAdmin.js",
-    "migrate-passwords": "node migrateAdminPasswords.js"
+    "ensure-admin": "node ensureAdmin.js",
+    "remove-hashing": "node removePasswordHashing.js"
   },
   "keywords": [],
   "author": "",

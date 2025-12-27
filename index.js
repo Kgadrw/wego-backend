@@ -48,6 +48,37 @@ mongoose.connect(MONGODB_URI, {
     // process.exit(1);
   });
 
+// Ensure admin exists on startup (non-blocking)
+setTimeout(async () => {
+  try {
+    const Admin = (await import('./models/Admin.js')).default;
+    const admin = await Admin.findOne({ email: 'admin@connectrwanda.com' });
+    
+    if (!admin) {
+      console.log('📋 Creating default admin account...');
+      const newAdmin = new Admin({
+        email: 'admin@connectrwanda.com',
+        password: 'admin123',
+        name: 'Admin User',
+        role: 'admin',
+      });
+      await newAdmin.save();
+      console.log('✅ Default admin created: admin@connectrwanda.com / admin123');
+    } else {
+      // Check if password is hashed and convert to plain text if needed
+      if (admin.password && admin.password.startsWith('$2')) {
+        console.log('🔄 Converting hashed password to plain text...');
+        admin.password = 'admin123';
+        admin.markModified('password');
+        await admin.save();
+        console.log('✅ Password converted to plain text');
+      }
+    }
+  } catch (error) {
+    console.error('⚠️  Could not ensure admin exists:', error.message);
+  }
+}, 3000); // Wait 3 seconds after server starts
+
 // Verify email connection on startup (non-blocking, with timeout)
 // This runs asynchronously and won't block server startup
 setTimeout(() => {
